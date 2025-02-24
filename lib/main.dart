@@ -41,6 +41,9 @@ class _ImageWithContextMenuState extends State<ImageWithContextMenu> {
   /// Флаг видимости контекстного меню.
   bool _menuVisible = false;
 
+  /// Текст сообщения об ошибке.
+  String? _errorMessage;
+
   @override
   void initState() {
     super.initState();
@@ -51,7 +54,12 @@ class _ImageWithContextMenuState extends State<ImageWithContextMenu> {
         ..style.width = '100%'
         ..style.height = '100%'
         ..style.objectFit = 'contain'
-        ..onDoubleClick.listen((_) => _toggleFullscreen());
+        ..onDoubleClick.listen((_) => _toggleFullscreen())
+        ..onError.listen((_) {
+          setState(() {
+            _errorMessage = 'Failed to load image. Please check the URL.';
+          });
+        });
 
       ui.platformViewRegistry.registerViewFactory(
         'imageElement',
@@ -78,6 +86,12 @@ class _ImageWithContextMenuState extends State<ImageWithContextMenu> {
     });
   }
 
+  /// Проверяет, является ли введённая строка валидным URL.
+  bool _isValidUrl(String url) {
+    final uri = Uri.tryParse(url);
+    return uri != null && uri.hasScheme && uri.hasAuthority;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Stack(
@@ -87,27 +101,39 @@ class _ImageWithContextMenuState extends State<ImageWithContextMenu> {
             // Поле для ввода URL изображения и кнопка для его отображения.
             Padding(
               padding: const EdgeInsets.all(16.0),
-              child: Row(
+              child: Column(
                 children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _urlController,
-                      decoration: const InputDecoration(
-                        labelText: 'Enter image URL',
-                        border: OutlineInputBorder(),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _urlController,
+                          decoration: InputDecoration(
+                            labelText: 'Enter image URL',
+                            border: const OutlineInputBorder(),
+                            errorText: _errorMessage,
+                          ),
+                        ),
                       ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  ElevatedButton(
-                    onPressed: () {
-                      if (kIsWeb && _urlController.text.isNotEmpty) {
-                        setState(() {
-                          _imageElement.src = _urlController.text;
-                        });
-                      }
-                    },
-                    child: const Text('Show Image'),
+                      const SizedBox(width: 8),
+                      ElevatedButton(
+                        onPressed: () {
+                          setState(() {
+                            final url = _urlController.text;
+
+                            if (_isValidUrl(url)) {
+                              _errorMessage = null;
+                              if (kIsWeb) {
+                                _imageElement.src = url;
+                              }
+                            } else {
+                              _errorMessage = 'Invalid URL. Please enter a valid image URL.';
+                            }
+                          });
+                        },
+                        child: const Text('Show Image'),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -117,7 +143,12 @@ class _ImageWithContextMenuState extends State<ImageWithContextMenu> {
             Expanded(
               child: Center(
                 child: kIsWeb
-                    ? const HtmlElementView(viewType: 'imageElement')
+                    ? _errorMessage != null
+                    ? Text(
+                  _errorMessage!,
+                  style: const TextStyle(color: Colors.red),
+                )
+                    : const HtmlElementView(viewType: 'imageElement')
                     : const Text('Image display is only supported on Web.'),
               ),
             ),
